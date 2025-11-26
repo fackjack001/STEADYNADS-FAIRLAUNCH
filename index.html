@@ -654,7 +654,8 @@
                 const balanceFormatted = parseFloat(ethers.utils.formatEther(balance));
                 document.getElementById('balance').textContent = balanceFormatted.toLocaleString(undefined, {maximumFractionDigits: 0});
                 
-                const mintedFormatted = parseFloat(ethers.utils.formatEther(minted)) / 1e18;
+                // Fix: totalMinted is already in wei, just format it directly
+                const mintedFormatted = parseFloat(ethers.utils.formatEther(minted));
                 document.getElementById('totalMinted').textContent = mintedFormatted.toLocaleString(undefined, {maximumFractionDigits: 0});
                 
                 const progress = (mintedFormatted / 1000000000) * 100;

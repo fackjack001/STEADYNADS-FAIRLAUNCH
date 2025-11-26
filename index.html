@@ -1,753 +1,771 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Zap, Twitter, Clock, Coins, TrendingUp, Shield, Users, Sparkles, Target, Award, ChevronRight, ExternalLink } from 'lucide-react';
-
-const CONTRACT_ADDRESS = '0x79569Ca82504954FFEd92941134362DAcAD6c72a';
-const TREASURY_ADDRESS = '0x135E42AEeef88de2a9938C07dDcbB2A846dE2cF6';
-const CHAIN_ID = 143;
-const RPC_URL = 'https://rpc.monad.xyz';
-const MINT_COST = '1';
-const MINT_AMOUNT = '5000';
-
-const ElectricBackground = () => {
-  const canvasRef = useRef(null);
-  
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    const setCanvasSize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-    setCanvasSize();
-    
-    const particles = [];
-    const particleCount = 100;
-    const lightning = [];
-    
-    for (let i = 0; i < particleCount; i++) {
-      particles.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 1,
-        vy: (Math.random() - 0.5) * 1,
-        size: Math.random() * 3 + 1,
-        brightness: Math.random()
-      });
-    }
-    
-    // Lightning bolts
-    const createLightning = () => {
-      if (Math.random() > 0.98 && lightning.length < 3) {
-        lightning.push({
-          x: Math.random() * canvas.width,
-          y: 0,
-          segments: [],
-          alpha: 1,
-          color: ['#00ffff', '#0088ff', '#ff00ff'][Math.floor(Math.random() * 3)]
-        });
-      }
-    };
-    
-    const animate = () => {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // Update lightning
-      createLightning();
-      lightning.forEach((bolt, index) => {
-        if (bolt.segments.length < 15) {
-          const lastPoint = bolt.segments[bolt.segments.length - 1] || { x: bolt.x, y: bolt.y };
-          bolt.segments.push({
-            x: lastPoint.x + (Math.random() - 0.5) * 50,
-            y: lastPoint.y + Math.random() * 40 + 20
-          });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STEADYNADS - Fair Launch Mining</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        
-        ctx.strokeStyle = bolt.color;
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = bolt.color;
-        ctx.lineWidth = 3;
-        ctx.globalAlpha = bolt.alpha;
-        
-        ctx.beginPath();
-        ctx.moveTo(bolt.x, bolt.y);
-        bolt.segments.forEach(seg => ctx.lineTo(seg.x, seg.y));
-        ctx.stroke();
-        
-        bolt.alpha -= 0.02;
-        if (bolt.alpha <= 0) lightning.splice(index, 1);
-      });
-      
-      ctx.globalAlpha = 1;
-      
-      // Particles
-      particles.forEach((p, i) => {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.brightness = Math.sin(Date.now() / 1000 + i) * 0.5 + 0.5;
-        
-        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
-        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
-        
-        const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
-        gradient.addColorStop(0, `rgba(0, 255, 255, ${p.brightness})`);
-        gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
-        
-        ctx.fillStyle = gradient;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#00ffff';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Connections
-        particles.slice(i + 1).forEach(p2 => {
-          const dx = p.x - p2.x;
-          const dy = p.y - p2.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          
-          if (dist < 120) {
-            const opacity = (1 - dist / 120) * 0.6;
-            ctx.strokeStyle = `rgba(0, 255, 255, ${opacity})`;
-            ctx.lineWidth = 1;
-            ctx.shadowBlur = 5;
-            ctx.beginPath();
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.stroke();
-          }
-        });
-      });
-      
-      requestAnimationFrame(animate);
-    };
-    
-    animate();
-    
-    window.addEventListener('resize', setCanvasSize);
-    return () => window.removeEventListener('resize', setCanvasSize);
-  }, []);
-  
-  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }} />;
-};
 
-const FloatingOrb = ({ delay = 0, duration = 20 }) => (
-  <div 
-    className="absolute rounded-full blur-3xl opacity-20 animate-float"
-    style={{
-      width: '400px',
-      height: '400px',
-      background: 'radial-gradient(circle, rgba(0,255,255,0.8) 0%, rgba(0,136,255,0.4) 50%, transparent 100%)',
-      animationDelay: `${delay}s`,
-      animationDuration: `${duration}s`,
-      top: `${Math.random() * 100}%`,
-      left: `${Math.random() * 100}%`,
-    }}
-  />
-);
-
-const STEADYNADS = () => {
-  const [account, setAccount] = useState(null);
-  const [balance, setBalance] = useState('0');
-  const [totalMinted, setTotalMinted] = useState('0');
-  const [canMint, setCanMint] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
-  const [mintCount, setMintCount] = useState(0);
-  const [remainingMints, setRemainingMints] = useState(1000);
-  const [isMinting, setIsMinting] = useState(false);
-  const [txHash, setTxHash] = useState('');
-  const [error, setError] = useState('');
-  const [showSuccess, setShowSuccess] = useState(false);
-
-  const TOTAL_SUPPLY = 1000000000;
-  const TREASURY_RESERVE = 100000000;
-  const MINTABLE_SUPPLY = 900000000;
-  
-  const progressPercentage = (parseFloat(totalMinted) / TOTAL_SUPPLY) * 100;
-  const mintablePercentage = ((parseFloat(totalMinted) - TREASURY_RESERVE) / MINTABLE_SUPPLY) * 100;
-
-  useEffect(() => {
-    checkWalletConnection();
-    
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes float {
-        0%, 100% { transform: translate(0, 0) rotate(0deg); }
-        25% { transform: translate(100px, -100px) rotate(90deg); }
-        50% { transform: translate(-50px, -150px) rotate(180deg); }
-        75% { transform: translate(-100px, -50px) rotate(270deg); }
-      }
-      @keyframes glow-pulse {
-        0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 255, 0.5), 0 0 40px rgba(0, 255, 255, 0.3); }
-        50% { box-shadow: 0 0 40px rgba(0, 255, 255, 0.8), 0 0 80px rgba(0, 255, 255, 0.5); }
-      }
-      @keyframes slide-up {
-        from { transform: translateY(20px); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
-      }
-      .animate-float { animation: float linear infinite; }
-      .animate-glow-pulse { animation: glow-pulse 2s ease-in-out infinite; }
-      .animate-slide-up { animation: slide-up 0.6s ease-out forwards; }
-    `;
-    document.head.appendChild(style);
-    
-    return () => document.head.removeChild(style);
-  }, []);
-
-  useEffect(() => {
-    if (account) {
-      fetchContractData();
-      const interval = setInterval(fetchContractData, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [account]);
-
-  const checkWalletConnection = async () => {
-    if (typeof window.ethereum !== 'undefined') {
-      try {
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-        if (accounts.length > 0) {
-          setAccount(accounts[0]);
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: #00ff41;
+            overflow-x: hidden;
+            position: relative;
+            min-height: 100vh;
         }
-      } catch (err) {
-        console.error('Error checking wallet:', err);
-      }
-    }
-  };
 
-  const connectWallet = async () => {
-    if (typeof window.ethereum === 'undefined') {
-      setError('Please install MetaMask to use this dApp');
-      return;
-    }
+        #matrix {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 0;
+            opacity: 0.12;
+        }
 
-    try {
-      setError('');
-      await window.ethereum.request({
-        method: 'wallet_addEthereumChain',
-        params: [{
-          chainId: `0x${CHAIN_ID.toString(16)}`,
-          chainName: 'Monad Mainnet',
-          nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
-          rpcUrls: [RPC_URL],
-        }]
-      });
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
 
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      setAccount(accounts[0]);
-    } catch (err) {
-      setError(err.message || 'Failed to connect wallet');
-    }
-  };
+        header {
+            border: 2px solid #00ff41;
+            padding: 30px;
+            margin-bottom: 30px;
+            background: rgba(0, 255, 65, 0.05);
+            box-shadow: 0 0 40px rgba(0, 255, 65, 0.3);
+            position: relative;
+            backdrop-filter: blur(10px);
+        }
 
-  const fetchContractData = async () => {
-    if (!account) return;
+        h1 {
+            font-size: 52px;
+            text-shadow: 0 0 15px #00ff41, 0 0 30px #00ff41;
+            letter-spacing: 6px;
+            display: inline-block;
+            animation: glow 2s ease-in-out infinite;
+        }
 
-    try {
-      const provider = new window.ethers.providers.Web3Provider(window.ethereum);
-      const contract = new window.ethers.Contract(
-        CONTRACT_ADDRESS,
-        [
-          'function balanceOf(address) view returns (uint256)',
-          'function totalMinted() view returns (uint256)',
-          'function canMint(address) view returns (bool)',
-          'function timeUntilNextMint(address) view returns (uint256)',
-          'function mintCount(address) view returns (uint256)',
-          'function remainingMintsForWallet(address) view returns (uint256)',
-          'function mint() payable',
-        ],
-        provider
-      );
+        @keyframes glow {
+            0%, 100% { text-shadow: 0 0 15px #00ff41, 0 0 30px #00ff41; }
+            50% { text-shadow: 0 0 25px #00ff41, 0 0 50px #00ff41; }
+        }
 
-      const [bal, minted, canMintNow, cooldownTime, count, remaining] = await Promise.all([
-        contract.balanceOf(account),
-        contract.totalMinted(),
-        contract.canMint(account),
-        contract.timeUntilNextMint(account),
-        contract.mintCount(account),
-        contract.remainingMintsForWallet(account)
-      ]);
+        .wallet-btn {
+            float: right;
+            background: transparent;
+            border: 2px solid #00ff41;
+            color: #00ff41;
+            padding: 14px 28px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
 
-      setBalance(window.ethers.utils.formatEther(bal));
-      setTotalMinted((parseFloat(window.ethers.utils.formatEther(minted)) / 1e18).toFixed(0));
-      setCanMint(canMintNow);
-      setCooldown(cooldownTime.toNumber());
-      setMintCount(count.toNumber());
-      setRemainingMints(remaining.toNumber());
-    } catch (err) {
-      console.error('Error fetching data:', err);
-    }
-  };
+        .wallet-btn:hover {
+            background: #00ff41;
+            color: #0a0e27;
+            box-shadow: 0 0 25px #00ff41;
+            transform: scale(1.05);
+        }
 
-  const handleMint = async () => {
-    if (!account) {
-      setError('Please connect your wallet first');
-      return;
-    }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
 
-    try {
-      setIsMinting(true);
-      setError('');
-      setTxHash('');
-      setShowSuccess(false);
+        .stat-box {
+            border: 2px solid #00ff41;
+            padding: 25px;
+            background: rgba(0, 0, 0, 0.7);
+            position: relative;
+            transition: all 0.3s;
+            backdrop-filter: blur(5px);
+        }
 
-      const provider = new window.ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      const contract = new window.ethers.Contract(
-        CONTRACT_ADDRESS,
-        ['function mint() payable'],
-        signer
-      );
+        .stat-box:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 20px rgba(0, 255, 65, 0.4);
+        }
 
-      const tx = await contract.mint({ value: window.ethers.utils.parseEther(MINT_COST) });
-      setTxHash(tx.hash);
-      
-      await tx.wait();
-      
-      setShowSuccess(true);
-      await fetchContractData();
-      setTimeout(() => setShowSuccess(false), 5000);
-    } catch (err) {
-      setError(err.message || 'Minting failed');
-    } finally {
-      setIsMinting(false);
-    }
-  };
+        .stat-label {
+            font-size: 11px;
+            opacity: 0.8;
+            margin-bottom: 12px;
+            letter-spacing: 2px;
+        }
 
-  return (
-    <div className="min-h-screen bg-black text-white overflow-hidden relative">
-      <ElectricBackground />
-      
-      {/* Floating Orbs */}
-      <FloatingOrb delay={0} duration={25} />
-      <FloatingOrb delay={5} duration={30} />
-      <FloatingOrb delay={10} duration={35} />
-      
-      {/* Gradient Overlays */}
-      <div className="fixed inset-0 bg-gradient-to-br from-cyan-900/20 via-blue-900/10 to-purple-900/20 pointer-events-none" style={{ zIndex: 1 }} />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-500/10 via-transparent to-transparent pointer-events-none" style={{ zIndex: 1 }} />
-      
-      <div className="relative" style={{ zIndex: 2 }}>
-        {/* Header */}
-        <header className="container mx-auto px-4 sm:px-6 py-6">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-black/40 backdrop-blur-xl border border-cyan-500/20 rounded-3xl p-4 sm:p-6 animate-glow-pulse">
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <div className="absolute inset-0 bg-cyan-500 blur-2xl opacity-60 animate-pulse" />
-                <Zap className="w-12 h-12 sm:w-14 sm:h-14 text-cyan-400 relative" strokeWidth={2.5} />
-              </div>
-              <div>
-                <h1 className="text-3xl sm:text-4xl font-black bg-gradient-to-r from-cyan-300 via-blue-300 to-purple-300 bg-clip-text text-transparent tracking-tight">
-                  STEADYNADS
-                </h1>
-                <p className="text-xs sm:text-sm text-cyan-400/80 font-semibold tracking-wider">FAIR LAUNCH • ANTI-BOT • MONAD</p>
-              </div>
-            </div>
+        .stat-value {
+            font-size: 36px;
+            font-weight: bold;
+            text-shadow: 0 0 12px #00ff41;
+            margin-bottom: 5px;
+        }
+
+        .mining-zone {
+            border: 2px solid #00ff41;
+            padding: 40px;
+            background: rgba(0, 0, 0, 0.8);
+            margin-bottom: 30px;
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .terminal {
+            background: #000;
+            border: 2px solid #00ff41;
+            padding: 20px;
+            min-height: 250px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            overflow-y: auto;
+            max-height: 450px;
+            box-shadow: inset 0 0 20px rgba(0, 255, 65, 0.1);
+        }
+
+        .terminal-line {
+            margin-bottom: 6px;
+            word-break: break-word;
+            line-height: 1.4;
+        }
+
+        .terminal-line::before {
+            content: '▸ ';
+            color: #00ff41;
+            font-weight: bold;
+        }
+
+        .terminal-line.success {
+            color: #00ff41;
+            font-weight: bold;
+            text-shadow: 0 0 5px #00ff41;
+        }
+
+        .terminal-line.error {
+            color: #ff4136;
+            font-weight: bold;
+        }
+
+        .terminal-line.warning {
+            color: #ffdc00;
+        }
+
+        .terminal-line.info {
+            color: #7fdbff;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 22px;
+            background: transparent;
+            border: 2px solid #00ff41;
+            color: #00ff41;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            font-weight: bold;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: #00ff41;
+            color: #0a0e27;
+            box-shadow: 0 0 35px #00ff41;
+            transform: translateY(-3px);
+        }
+
+        .btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .btn.mining {
+            animation: pulse 1.5s infinite;
+            background: rgba(0, 255, 65, 0.15);
+            border-width: 3px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { 
+                box-shadow: 0 0 20px #00ff41;
+                border-color: #00ff41;
+            }
+            50% { 
+                box-shadow: 0 0 50px #00ff41;
+                border-color: #00ffaa;
+            }
+        }
+
+        .hashrate-display {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: rgba(0, 255, 65, 0.08);
+            border-left: 4px solid #00ff41;
+            backdrop-filter: blur(5px);
+        }
+
+        .hashrate-item {
+            text-align: center;
+        }
+
+        .hashrate-item strong {
+            display: block;
+            font-size: 11px;
+            opacity: 0.8;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+
+        .hashrate-item span {
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00ff41;
+        }
+
+        .info-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .info-box {
+            border: 2px solid #00ff41;
+            padding: 30px;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+        }
+
+        .info-box h3 {
+            margin-bottom: 20px;
+            font-size: 22px;
+            text-shadow: 0 0 10px #00ff41;
+        }
+
+        .info-item {
+            margin-bottom: 15px;
+            padding-left: 18px;
+            border-left: 3px solid #00ff41;
+            line-height: 1.6;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px;
+            border-top: 2px solid #00ff41;
+            margin-top: 50px;
+            opacity: 0.8;
+        }
+
+        footer a {
+            color: #00ff41;
+            text-decoration: none;
+            text-shadow: 0 0 8px #00ff41;
+            transition: all 0.3s;
+        }
+
+        footer a:hover {
+            text-shadow: 0 0 20px #00ff41;
+            letter-spacing: 2px;
+        }
+
+        .scan-line {
+            position: fixed;
+            width: 100%;
+            height: 3px;
+            background: rgba(0, 255, 65, 0.6);
+            box-shadow: 0 0 15px #00ff41;
+            animation: scan 5s linear infinite;
+            z-index: 9999;
+            pointer-events: none;
+        }
+
+        @keyframes scan {
+            from { top: 0; }
+            to { top: 100%; }
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(0, 255, 65, 0.1);
+            margin-top: 15px;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff41, #00ffaa);
+            width: 0%;
+            transition: width 0.3s;
+            box-shadow: 0 0 10px #00ff41;
+        }
+
+        @media (max-width: 768px) {
+            .info-section {
+                grid-template-columns: 1fr;
+            }
             
-            <div className="flex items-center gap-3">
-              <a
-                href="https://x.com/steadynads"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group p-3 sm:p-4 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-400/30 hover:border-cyan-400/60 transition-all hover:scale-110 relative overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-500 opacity-0 group-hover:opacity-20 transition-opacity" />
-                <Twitter className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-300 relative" />
-              </a>
-              
-              <button
-                onClick={connectWallet}
-                className="group relative px-6 sm:px-8 py-3 sm:py-4 rounded-2xl font-bold text-sm sm:text-base bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 hover:from-cyan-400 hover:via-blue-400 hover:to-purple-400 transition-all shadow-lg shadow-cyan-500/50 hover:shadow-cyan-500/80 hover:scale-105 overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                <span className="relative flex items-center gap-2">
-                  {account ? (
-                    <>
-                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                      {account.slice(0, 6)}...{account.slice(-4)}
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      Connect Wallet
-                    </>
-                  )}
-                </span>
-              </button>
+            .hashrate-display {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            h1 {
+                font-size: 36px;
+            }
+            
+            .wallet-btn {
+                float: none;
+                display: block;
+                margin-top: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="scan-line"></div>
+    <canvas id="matrix"></canvas>
+
+    <div class="container">
+        <header>
+            <h1>⚡ STEADYNADS</h1>
+            <button class="wallet-btn" id="connectBtn" onclick="connectWallet()">CONNECT WALLET</button>
+            <div style="clear: both; margin-top: 20px;">
+                <small>FAIR LAUNCH TOKEN - MONAD MAINNET</small>
             </div>
-          </div>
         </header>
 
-        {/* Hero Section */}
-        <main className="container mx-auto px-4 sm:px-6 py-8 sm:py-16">
-          <div className="text-center mb-12 sm:mb-20 animate-slide-up">
-            <div className="inline-block mb-6 px-6 py-2 rounded-full bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border border-cyan-400/30 backdrop-blur-sm">
-              <span className="text-cyan-300 font-bold text-sm sm:text-base flex items-center gap-2">
-                <Sparkles className="w-4 h-4 animate-pulse" />
-                LIVE ON MONAD MAINNET
-                <Sparkles className="w-4 h-4 animate-pulse" />
-              </span>
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="stat-label">YOUR BALANCE</div>
+                <div class="stat-value" id="balance">0</div>
+                <div class="stat-label">SNADS</div>
             </div>
+            <div class="stat-box">
+                <div class="stat-label">MINT COUNT</div>
+                <div class="stat-value" id="mintCount">0</div>
+                <div class="stat-label">/ 1000 MAX</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">TOTAL MINTED</div>
+                <div class="stat-value" id="totalMinted">0</div>
+                <div class="stat-label">/ 1B SNADS</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">COOLDOWN</div>
+                <div class="stat-value" id="cooldown">0</div>
+                <div class="stat-label">SECONDS</div>
+            </div>
+        </div>
+
+        <div class="mining-zone">
+            <h2 style="margin-bottom: 25px; text-shadow: 0 0 10px #00ff41;">⛏️ MINING TERMINAL</h2>
             
-            <h2 className="text-5xl sm:text-7xl lg:text-8xl font-black mb-6 sm:mb-8 leading-tight">
-              <span className="bg-gradient-to-r from-cyan-300 via-blue-300 to-purple-300 bg-clip-text text-transparent drop-shadow-2xl">
-                MINE $SNADS
-              </span>
-              <br />
-              <span className="bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300 bg-clip-text text-transparent">
-                EARN REWARDS
-              </span>
-            </h2>
-            
-            <p className="text-lg sm:text-2xl text-gray-300 max-w-3xl mx-auto leading-relaxed font-light">
-              Fair launch mining protocol with advanced anti-bot protection.
-              <br />
-              <span className="text-cyan-400 font-semibold">Mine 5,000 SNADS for just 1 MON per mint.</span>
-            </p>
-          </div>
-
-          {/* Main Progress Section */}
-          <div className="max-w-6xl mx-auto mb-12 sm:mb-16">
-            <div className="relative bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-gray-900/90 backdrop-blur-2xl border-2 border-cyan-500/30 rounded-3xl sm:rounded-[3rem] p-6 sm:p-12 shadow-2xl shadow-cyan-500/20 overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-purple-500/5" />
-              <div className="absolute -top-24 -right-24 w-48 h-48 bg-cyan-500/20 rounded-full blur-3xl" />
-              <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-purple-500/20 rounded-full blur-3xl" />
-              
-              <div className="relative">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                  <div>
-                    <h3 className="text-2xl sm:text-3xl font-bold text-cyan-300 mb-2 flex items-center gap-3">
-                      <Target className="w-7 h-7 sm:w-8 sm:h-8" />
-                      Mining Progress
-                    </h3>
-                    <p className="text-gray-400 text-sm sm:text-base">Total tokens mined by the community</p>
-                  </div>
-                  <div className="text-left sm:text-right">
-                    <p className="text-4xl sm:text-5xl font-black text-white mb-1">
-                      {parseFloat(totalMinted).toLocaleString()}
-                    </p>
-                    <p className="text-cyan-400 font-semibold text-sm sm:text-base">/ {TOTAL_SUPPLY.toLocaleString()} SNADS</p>
-                  </div>
+            <div class="hashrate-display">
+                <div class="hashrate-item">
+                    <strong>MINT COST</strong>
+                    <span>1 MON</span>
                 </div>
-                
-                <div className="relative h-10 sm:h-12 bg-gray-950/80 rounded-2xl overflow-hidden border-2 border-cyan-500/20 shadow-inner mb-6">
-                  <div 
-                    className="absolute inset-0 bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 transition-all duration-1000 ease-out"
-                    style={{ width: `${progressPercentage}%` }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse" style={{ width: `${progressPercentage}%` }} />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-base sm:text-lg font-black text-white drop-shadow-2xl px-3 py-1 bg-black/40 rounded-lg backdrop-blur-sm">
-                      {progressPercentage.toFixed(3)}% MINED
-                    </span>
-                  </div>
+                <div class="hashrate-item">
+                    <strong>MINT AMOUNT</strong>
+                    <span style="color: #00ffaa;">5000</span>
                 </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                  <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-400/30 rounded-2xl p-4 sm:p-6 backdrop-blur-sm">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-400" />
-                      <span className="text-gray-300 font-semibold text-sm sm:text-base">Treasury Reserve</span>
-                    </div>
-                    <p className="text-2xl sm:text-3xl font-bold text-white">{TREASURY_RESERVE.toLocaleString()}</p>
-                    <p className="text-cyan-400 text-xs sm:text-sm mt-1">10% • Locked</p>
-                  </div>
-                  
-                  <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-400/30 rounded-2xl p-4 sm:p-6 backdrop-blur-sm">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Users className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400" />
-                      <span className="text-gray-300 font-semibold text-sm sm:text-base">Community Mintable</span>
-                    </div>
-                    <p className="text-2xl sm:text-3xl font-bold text-white">{MINTABLE_SUPPLY.toLocaleString()}</p>
-                    <p className="text-purple-400 text-xs sm:text-sm mt-1">90% • {mintablePercentage.toFixed(2)}% Mined</p>
-                  </div>
+                <div class="hashrate-item">
+                    <strong>REMAINING</strong>
+                    <span id="remaining">1000</span>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 max-w-6xl mx-auto mb-12 sm:mb-16">
-            <div className="group bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-2 border-cyan-500/30 rounded-3xl p-4 sm:p-8 hover:border-cyan-400/60 transition-all hover:scale-105 hover:shadow-2xl hover:shadow-cyan-500/30 relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/0 to-cyan-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="relative">
-                <Coins className="w-8 h-8 sm:w-10 sm:h-10 text-cyan-400 mb-3 sm:mb-4" />
-                <p className="text-gray-400 text-xs sm:text-sm mb-2 font-semibold">Your Balance</p>
-                <p className="text-2xl sm:text-4xl font-black text-white">{parseFloat(balance).toLocaleString(0, {maximumFractionDigits: 0})}</p>
-                <p className="text-cyan-400 text-xs sm:text-sm mt-1 font-bold">SNADS</p>
-              </div>
-            </div>
-
-            <div className="group bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-2 border-blue-500/30 rounded-3xl p-4 sm:p-8 hover:border-blue-400/60 transition-all hover:scale-105 hover:shadow-2xl hover:shadow-blue-500/30 relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/0 to-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="relative">
-                <TrendingUp className="w-8 h-8 sm:w-10 sm:h-10 text-blue-400 mb-3 sm:mb-4" />
-                <p className="text-gray-400 text-xs sm:text-sm mb-2 font-semibold">Total Mints</p>
-                <p className="text-2xl sm:text-4xl font-black text-white">{mintCount}</p>
-                <p className="text-blue-400 text-xs sm:text-sm mt-1 font-bold">/ 1000 Max</p>
-              </div>
-            </div>
-
-            <div className="group bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-2 border-purple-500/30 rounded-3xl p-4 sm:p-8 hover:border-purple-400/60 transition-all hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/30 relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/0 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="relative">
-                <Clock className="w-8 h-8 sm:w-10 sm:h-10 text-purple-400 mb-3 sm:mb-4" />
-                <p className="text-gray-400 text-xs sm:text-sm mb-2 font-semibold">Cooldown</p>
-                <p className="text-2xl sm:text-4xl font-black text-white">{cooldown}</p>
-                <p className="text-purple-400 text-xs sm:text-sm mt-1 font-bold">seconds</p>
-              </div>
-            </div>
-
-            <div className="group bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-2 border-pink-500/30 rounded-3xl p-4 sm:p-8 hover:border-pink-400/60 transition-all hover:scale-105 hover:shadow-2xl hover:shadow-pink-500/30 relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-pink-500/0 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="relative">
-                <Award className="w-8 h-8 sm:w-10 sm:h-10 text-pink-400 mb-3 sm:mb-4" />
-                <p className="text-gray-400 text-xs sm:text-sm mb-2 font-semibold">Remaining</p>
-                <p className="text-2xl sm:text-4xl font-black text-white">{remainingMints}</p>
-                <p className="text-pink-400 text-xs sm:text-sm mt-1 font-bold">mints left</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Mint Section */}
-          <div className="max-w-3xl mx-auto mb-12 sm:mb-20">
-            <div className="relative bg-gradient-to-br from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-2xl border-2 border-cyan-500/40 rounded-[2.5rem] sm:rounded-[3rem] p-8 sm:p-16 shadow-2xl shadow-cyan-500/30 overflow-hidden">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,_rgba(0,255,255,0.1),transparent_70%)]" />
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent" />
-              
-              <div className="relative">
-                <div className="text-center mb-10">
-                  <div className="inline-flex items-center gap-3 mb-6 px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-400/30">
-                    <Zap className="w-6 h-6 text-cyan-400 animate-pulse" />
-                    <span className="text-cyan-300 font-bold text-lg">MINT NOW</span>
-                    <Zap className="w-6 h-6 text-cyan-400 animate-pulse" />
-                  </div>
-                  
-                  <h3 className="text-4xl sm:text-5xl font-black mb-4 bg-gradient-to-r from-cyan-300 via-blue-300 to-purple-300 bg-clip-text text-transparent">
-                    Mine {MINT_AMOUNT} SNADS
-                  </h3>
-                  <p className="text-lg sm:text-xl text-gray-300">
-                    Pay <span className="text-cyan-400 font-bold">{MINT_COST} MON</span> per mint • 
-                    <span className="text-purple-400 font-bold"> 10s</span> cooldown
-                  </p>
+                <div class="hashrate-item">
+                    <strong>STATUS</strong>
+                    <span id="status" style="color: #ffdc00;">IDLE</span>
                 </div>
-
-                {error && (
-                  <div className="mb-8 p-5 bg-red-500/10 border-2 border-red-400/40 rounded-2xl backdrop-blur-sm animate-slide-up">
-                    <p className="text-red-300 text-center font-semibold">{error}</p>
-                  </div>
-                )}
-
-                {showSuccess && (
-                  <div className="mb-8 p-5 bg-green-500/10 border-2 border-green-400/40 rounded-2xl backdrop-blur-sm animate-slide-up">
-                    <p className="text-green-300 text-center font-semibold flex items-center justify-center gap-2">
-                      <Sparkles className="w-5 h-5" />
-                      Successfully minted {MINT_AMOUNT} SNADS!
-                      <Sparkles className="w-5 h-5" />
-                    </p>
-                  </div>
-                )}
-
-                {txHash && (
-                  <div className="mb-8 p-5 bg-cyan-500/10 border-2 border-cyan-400/40 rounded-2xl backdrop-blur-sm">
-                    <p className="text-cyan-300 text-center font-mono text-sm break-all">
-                      TX: {txHash}
-                    </p>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleMint}
-                  disabled={!canMint || isMinting || !account}
-                  className={`group relative w-full py-7 sm:py-8 rounded-3xl font-black text-xl sm:text-2xl transition-all duration-300 overflow-hidden ${
-                    canMint && !isMinting && account
-                      ? 'bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 hover:from-cyan-400 hover:via-blue-400 hover:to-purple-400 shadow-2xl shadow-cyan-500/50 hover:shadow-cyan-500/80 hover:scale-105 cursor-pointer'
-                      : 'bg-gray-800 text-gray-600 cursor-not-allowed border-2 border-gray-700'
-                  }`}
-                >
-                  {canMint && !isMinting && account && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-                  )}
-                  
-                  <span className="relative flex items-center justify-center gap-3">
-                    {isMinting ? (
-                      <>
-                        <Zap className="w-7 h-7 animate-spin" />
-                        MINING IN PROGRESS...
-                      </>
-                    ) : !account ? (
-                      <>
-                        <Sparkles className="w-6 h-6" />
-                        CONNECT WALLET FIRST
-                      </>
-                    ) : !canMint ? (
-                      <>
-                        <Clock className="w-6 h-6" />
-                        WAIT {cooldown}s
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="w-7 h-7 group-hover:rotate-12 transition-transform" />
-                        MINT NOW
-                        <ChevronRight className="w-7 h-7 group-hover:translate-x-2 transition-transform" />
-                      </>
-                    )}
-                  </span>
-                </button>
-              </div>
             </div>
-          </div>
 
-          {/* Features */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 max-w-6xl mx-auto mb-16 sm:mb-20">
-            <div className="group relative bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-2 border-cyan-500/30 rounded-3xl p-8 sm:p-10 hover:border-cyan-400/60 transition-all hover:scale-105 hover:shadow-2xl hover:shadow-cyan-500/30 overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/0 to-cyan-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/20 rounded-full blur-3xl -translate-y-16 translate-x-16" />
-              
-              <div className="relative">
-                <div className="mb-6 inline-flex p-4 rounded-2xl bg-cyan-500/10 border border-cyan-400/30">
-                  <Shield className="w-10 h-10 sm:w-12 sm:h-12 text-cyan-400" />
+            <div class="terminal" id="terminal">
+                <div class="terminal-line info">┌─ STEADYNADS Mining System ─┐</div>
+                <div class="terminal-line info">│ Fair Launch • Anti-Bot      │</div>
+                <div class="terminal-line info">└──────────────────────────────┘</div>
+                <div class="terminal-line">System initialized...</div>
+                <div class="terminal-line">Awaiting wallet connection...</div>
+            </div>
+
+            <div class="controls">
+                <button class="btn" id="mintBtn" onclick="mintTokens()" disabled>⛏️ MINT 5000 SNADS (1 MON)</button>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <div class="info-box">
+                <h3>▸ CONTRACT INFO</h3>
+                <div class="info-item">
+                    <strong>CONTRACT:</strong><br>
+                    <small style="word-break: break-all;">0x79569Ca82504954FFEd92941134362DAcAD6c72a</small>
                 </div>
-                <h4 className="text-2xl sm:text-3xl font-black mb-4 text-white">Anti-Bot Shield</h4>
-                <p className="text-gray-300 leading-relaxed">
-                  Advanced detection system with blacklisting, cooldowns, and same-block protection to ensure fair distribution for humans only.
-                </p>
-              </div>
-            </div>
-
-            <div className="group relative bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-2 border-blue-500/30 rounded-3xl p-8 sm:p-10 hover:border-blue-400/60 transition-all hover:scale-105 hover:shadow-2xl hover:shadow-blue-500/30 overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/0 to-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl -translate-y-16 translate-x-16" />
-              
-              <div className="relative">
-                <div className="mb-6 inline-flex p-4 rounded-2xl bg-blue-500/10 border border-blue-400/30">
-                  <Users className="w-10 h-10 sm:w-12 sm:h-12 text-blue-400" />
+                <div class="info-item">
+                    <strong>TREASURY:</strong><br>
+                    <small style="word-break: break-all;">0x135E42AEeef88de2a9938C07dDcbB2A846dE2cF6</small>
                 </div>
-                <h4 className="text-2xl sm:text-3xl font-black mb-4 text-white">Fair Launch</h4>
-                <p className="text-gray-300 leading-relaxed">
-                  No presale, no team tokens, no VC allocation. 90% community mintable with 10% treasury reserve. Pure decentralization.
-                </p>
-              </div>
-            </div>
-
-            <div className="group relative bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-2 border-purple-500/30 rounded-3xl p-8 sm:p-10 hover:border-purple-400/60 transition-all hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/30 overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/0 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/20 rounded-full blur-3xl -translate-y-16 translate-x-16" />
-              
-              <div className="relative">
-                <div className="mb-6 inline-flex p-4 rounded-2xl bg-purple-500/10 border border-purple-400/30">
-                  <Zap className="w-10 h-10 sm:w-12 sm:h-12 text-purple-400" />
+                <div class="info-item">
+                    <strong>NETWORK:</strong> Monad Mainnet
                 </div>
-                <h4 className="text-2xl sm:text-3xl font-black mb-4 text-white">Instant Rewards</h4>
-                <p className="text-gray-300 leading-relaxed">
-                  Mine 5,000 SNADS instantly for just 1 MON. Simple, fast, and transparent with only 10 second cooldown period.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Contract Info */}
-          <div className="max-w-5xl mx-auto">
-            <div className="relative bg-gradient-to-br from-gray-900/90 to-gray-800/90 backdrop-blur-2xl border-2 border-gray-700/50 rounded-3xl sm:rounded-[3rem] p-8 sm:p-12 shadow-2xl overflow-hidden">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,_rgba(0,255,255,0.05),transparent_50%)]" />
-              
-              <div className="relative">
-                <h4 className="text-3xl sm:text-4xl font-black mb-8 text-center bg-gradient-to-r from-cyan-300 to-purple-300 bg-clip-text text-transparent">
-                  Contract Information
-                </h4>
-                
-                <div className="space-y-4">
-                  <div className="group flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4 p-5 bg-gray-800/50 hover:bg-gray-800/80 rounded-2xl border border-gray-700/50 hover:border-cyan-500/30 transition-all">
-                    <span className="text-gray-400 font-semibold">Contract Address:</span>
-                    <span className="text-cyan-400 font-mono text-sm break-all">{CONTRACT_ADDRESS}</span>
-                  </div>
-                  
-                  <div className="group flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4 p-5 bg-gray-800/50 hover:bg-gray-800/80 rounded-2xl border border-gray-700/50 hover:border-cyan-500/30 transition-all">
-                    <span className="text-gray-400 font-semibold">Treasury Address:</span>
-                    <span className="text-purple-400 font-mono text-sm break-all">{TREASURY_ADDRESS}</span>
-                  </div>
-                  
-                  <div className="group flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4 p-5 bg-gray-800/50 hover:bg-gray-800/80 rounded-2xl border border-gray-700/50 hover:border-cyan-500/30 transition-all">
-                    <span className="text-gray-400 font-semibold">Blockchain:</span>
-                    <span className="text-white font-bold">Monad Mainnet (Chain ID: {CHAIN_ID})</span>
-                  </div>
-                  
-                  <div className="group flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4 p-5 bg-gray-800/50 hover:bg-gray-800/80 rounded-2xl border border-gray-700/50 hover:border-cyan-500/30 transition-all">
-                    <span className="text-gray-400 font-semibold">Total Supply:</span>
-                    <span className="text-white font-bold">{TOTAL_SUPPLY.toLocaleString()} SNADS</span>
-                  </div>
-                  
-                  <div className="group flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4 p-5 bg-gray-800/50 hover:bg-gray-800/80 rounded-2xl border border-gray-700/50 hover:border-cyan-500/30 transition-all">
-                    <span className="text-gray-400 font-semibold">Token Symbol:</span>
-                    <span className="text-white font-bold">$SNADS</span>
-                  </div>
-                  
-                  <div className="group flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4 p-5 bg-gradient-to-r from-cyan-500/10 to-purple-500/10 hover:from-cyan-500/20 hover:to-purple-500/20 rounded-2xl border-2 border-cyan-500/30 hover:border-cyan-400/50 transition-all">
-                    <span className="text-gray-300 font-semibold">Creator:</span>
-                    <a 
-                      href="https://x.com/steadynads" 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-2 group-hover:gap-3 transition-all"
-                    >
-                      @steadynads
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                  </div>
+                <div class="info-item">
+                    <strong>CHAIN ID:</strong> 143 (0x8F)
                 </div>
-              </div>
+                <div class="info-item">
+                    <strong>RPC:</strong> rpc.monad.xyz
+                </div>
+                <div class="info-item">
+                    <strong>TOTAL SUPPLY:</strong> 1,000,000,000 SNADS
+                </div>
+                <div class="info-item">
+                    <strong>MINTABLE:</strong> 900,000,000 (90%)
+                </div>
+                <div class="info-item">
+                    <strong>TREASURY:</strong> 100,000,000 (10%)
+                </div>
             </div>
-          </div>
-        </main>
 
-        {/* Footer */}
-        <footer className="container mx-auto px-4 sm:px-6 py-12 mt-20 border-t border-gray-800">
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-3 mb-6">
-              <Zap className="w-8 h-8 text-cyan-400" />
-              <span className="text-2xl font-black bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
-                STEADYNADS
-              </span>
+            <div class="info-box">
+                <h3>▸ HOW IT WORKS</h3>
+                <div class="info-item">
+                    <strong>[1]</strong> Connect MetaMask to Monad Mainnet
+                </div>
+                <div class="info-item">
+                    <strong>[2]</strong> Click MINT button (costs 1 MON)
+                </div>
+                <div class="info-item">
+                    <strong>[3]</strong> Receive 5,000 SNADS instantly
+                </div>
+                <div class="info-item">
+                    <strong>[4]</strong> Wait 10 seconds cooldown
+                </div>
+                <div class="info-item">
+                    <strong>[5]</strong> Repeat up to 1,000 times per wallet
+                </div>
+                <div class="info-item">
+                    <strong>[6]</strong> Max 5,000,000 SNADS per wallet
+                </div>
+                <div class="info-item" style="margin-top: 20px; color: #00ffaa; border-left-color: #00ffaa;">
+                    ✓ Anti-Bot Protection<br>
+                    ✓ Fair Distribution<br>
+                    ✓ No Presale
+                </div>
             </div>
-            
-            <p className="text-gray-400 mb-4">
-              © 2025 STEADYNADS. Built with ⚡ on Monad Mainnet.
-            </p>
-            
-            <p className="text-sm text-gray-500">
-              Created by{' '}
-              <a 
-                href="https://x.com/steadynads" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="text-cyan-400 hover:text-cyan-300 font-semibold transition-colors"
-              >
-                @steadynads
-              </a>
-              {' '}• Fair Launch • Anti-Bot Protected
-            </p>
-            
-            <div className="mt-8 flex justify-center gap-4">
-              <a
-                href="https://x.com/steadynads"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-6 py-3 rounded-xl bg-cyan-500/10 border border-cyan-500/30 hover:bg-cyan-500/20 hover:border-cyan-400/50 transition-all text-cyan-400 font-semibold flex items-center gap-2"
-              >
-                <Twitter className="w-5 h-5" />
-                Follow Us
-              </a>
-            </div>
-          </div>
+        </div>
+
+        <footer>
+            <p style="font-size: 18px; margin-bottom: 10px;">CREATED BY <a href="https://x.com/steadynads" target="_blank">@steadynads</a></p>
+            <p style="margin-top: 15px; font-size: 12px; opacity: 0.7;">STEADYNADS - FAIR LAUNCH ON MONAD</p>
         </footer>
-      </div>
-
-      {/* Load ethers.js */}
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
     </div>
-  );
-};
 
-export default STEADYNADS
+    <script>
+        const CONTRACT_ADDRESS = '0x79569Ca82504954FFEd92941134362DAcAD6c72a';
+        const TREASURY_ADDRESS = '0x135E42AEeef88de2a9938C07dDcbB2A846dE2cF6';
+        const RPC_URL = 'https://rpc.monad.xyz';
+        const CHAIN_ID = 143;
+        
+        const ABI = [
+            "function mint() payable",
+            "function balanceOf(address) view returns (uint256)",
+            "function totalMinted() view returns (uint256)",
+            "function canMint(address) view returns (bool)",
+            "function timeUntilNextMint(address) view returns (uint256)",
+            "function mintCount(address) view returns (uint256)",
+            "function remainingMintsForWallet(address) view returns (uint256)"
+        ];
+
+        let account = null;
+        let provider = null;
+        let contract = null;
+        let updateInterval = null;
+
+        // Matrix background
+        const canvas = document.getElementById('matrix');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const chars = '01$⚡⛏️';
+        const fontSize = 14;
+        const columns = canvas.width / fontSize;
+        const drops = [];
+        for (let i = 0; i < Math.floor(columns); i++) {
+            drops[i] = Math.floor(Math.random() * -100);
+        }
+
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(10, 14, 39, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#00ff41';
+            ctx.font = fontSize + 'px monospace';
+
+            for (let i = 0; i < drops.length; i++) {
+                const text = chars[Math.floor(Math.random() * chars.length)];
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+        setInterval(drawMatrix, 35);
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        function log(msg, type = 'normal') {
+            const terminal = document.getElementById('terminal');
+            const line = document.createElement('div');
+            line.className = 'terminal-line';
+            if (type === 'success') line.classList.add('success');
+            if (type === 'error') line.classList.add('error');
+            if (type === 'warning') line.classList.add('warning');
+            if (type === 'info') line.classList.add('info');
+            
+            const timestamp = new Date().toLocaleTimeString();
+            line.textContent = `[${timestamp}] ${msg}`;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+            
+            while (terminal.children.length > 150) {
+                terminal.removeChild(terminal.firstChild);
+            }
+        }
+
+        async function connectWallet() {
+            try {
+                if (typeof window.ethereum === 'undefined') {
+                    log('❌ MetaMask not detected!', 'error');
+                    alert('Please install MetaMask extension');
+                    return;
+                }
+
+                log('🔌 Requesting wallet connection...', 'info');
+                const accounts = await window.ethereum.request({
+                    method: 'eth_requestAccounts'
+                });
+
+                log('🌐 Switching to Monad Mainnet...', 'info');
+                try {
+                    await window.ethereum.request({
+                        method: 'wallet_switchEthereumChain',
+                        params: [{ chainId: '0x8F' }]
+                    });
+                } catch (switchError) {
+                    if (switchError.code === 4902) {
+                        log('➕ Adding Monad Mainnet...', 'warning');
+                        await window.ethereum.request({
+                            method: 'wallet_addEthereumChain',
+                            params: [{
+                                chainId: '0x8F',
+                                chainName: 'Monad Mainnet',
+                                nativeCurrency: { 
+                                    name: 'MON', 
+                                    symbol: 'MON', 
+                                    decimals: 18 
+                                },
+                                rpcUrls: [RPC_URL]
+                            }]
+                        });
+                        log('✓ Monad Mainnet added!', 'success');
+                    } else {
+                        throw switchError;
+                    }
+                }
+
+                account = accounts[0];
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+                
+                document.getElementById('connectBtn').textContent = 
+                    '🔗 ' + account.slice(0, 6) + '...' + account.slice(-4);
+                log('✓ Wallet connected: ' + account, 'success');
+                
+                document.getElementById('mintBtn').disabled = false;
+                document.getElementById('status').textContent = 'READY';
+                document.getElementById('status').style.color = '#00ff41';
+                
+                await loadData();
+                updateInterval = setInterval(loadData, 5000);
+                
+                log('✓ System ready! Click MINT to start.', 'success');
+            } catch (error) {
+                log('❌ ERROR: ' + error.message, 'error');
+                console.error(error);
+            }
+        }
+
+        async function loadData() {
+            if (!account || !contract) return;
+            
+            try {
+                const [balance, minted, canMintNow, cooldownTime, count, remaining] = await Promise.all([
+                    contract.balanceOf(account),
+                    contract.totalMinted(),
+                    contract.canMint(account),
+                    contract.timeUntilNextMint(account),
+                    contract.mintCount(account),
+                    contract.remainingMintsForWallet(account)
+                ]);
+
+                const balanceFormatted = parseFloat(ethers.utils.formatEther(balance));
+                document.getElementById('balance').textContent = balanceFormatted.toLocaleString(undefined, {maximumFractionDigits: 0});
+                
+                const mintedFormatted = parseFloat(ethers.utils.formatEther(minted)) / 1e18;
+                document.getElementById('totalMinted').textContent = mintedFormatted.toLocaleString(undefined, {maximumFractionDigits: 0});
+                
+                const progress = (mintedFormatted / 1000000000) * 100;
+                document.getElementById('progressFill').style.width = progress + '%';
+                
+                document.getElementById('mintCount').textContent = count.toString();
+                document.getElementById('remaining').textContent = remaining.toString();
+                
+                const cooldown = cooldownTime.toNumber();
+                document.getElementById('cooldown').textContent = cooldown;
+                
+                if (cooldown > 0) {
+                    document.getElementById('status').textContent = 'COOLDOWN';
+                    document.getElementById('status').style.color = '#ffdc00';
+                    document.getElementById('mintBtn').disabled = true;
+                } else if (canMintNow) {
+                    document.getElementById('status').textContent = 'READY';
+                    document.getElementById('status').style.color = '#00ff41';
+                    document.getElementById('mintBtn').disabled = false;
+                } else {
+                    document.getElementById('status').textContent = 'BLOCKED';
+                    document.getElementById('status').style.color = '#ff4136';
+                    document.getElementById('mintBtn').disabled = true;
+                }
+            } catch (error) {
+                console.error('Load error:', error);
+            }
+        }
+
+        async function mintTokens() {
+            if (!account || !contract) {
+                log('❌ Please connect wallet first', 'error');
+                return;
+            }
+
+            document.getElementById('mintBtn').disabled = true;
+            document.getElementById('mintBtn').classList.add('mining');
+            document.getElementById('status').textContent = 'MINTING';
+            document.getElementById('status').style.color = '#ffdc00';
+            
+            log('═══════════════════════════════', 'info');
+            log('⛏️  STARTING MINT...', 'info');
+            log('═══════════════════════════════', 'info');
+
+            try {
+                const signer = provider.getSigner();
+                const contractWithSigner = contract.connect(signer);
+
+                log('💰 Sending 1 MON...', 'warning');
+                
+                const tx = await contractWithSigner.mint({
+                    value: ethers.utils.parseEther('1')
+                });
+                
+                log('📨 TX sent: ' + tx.hash.slice(0, 20) + '...', 'warning');
+                log('⏳ Waiting for confirmation...', 'warning');
+                
+                const receipt = await tx.wait();
+                
+                if (receipt.status === 1) {
+                    log('═══════════════════════════════', 'success');
+                    log('🎉 MINT SUCCESS!', 'success');
+                    log('═══════════════════════════════', 'success');
+                    log('✓ Received 5,000 SNADS!', 'success');
+                    log('⛽ Gas used: ' + receipt.gasUsed.toString(), 'info');
+                    log('🔗 TX: ' + receipt.transactionHash, 'success');
+                    log('⏰ Cooldown: 10 seconds', 'info');
+                    
+                    document.getElementById('status').textContent = 'SUCCESS';
+                    document.getElementById('status').style.color = '#00ff41';
+                    
+                    await loadData();
+                } else {
+                    log('❌ TX failed', 'error');
+                    document.getElementById('status').textContent = 'FAILED';
+                    document.getElementById('status').style.color = '#ff4136';
+                }
+                
+            } catch (error) {
+                if (error.message.includes('user rejected') || error.code === 4001) {
+                    log('❌ Transaction rejected by user', 'error');
+                } else if (error.message.includes('Cooldown')) {
+                    log('⏰ Cooldown active - please wait', 'warning');
+                } else {
+                    log('❌ ERROR: ' + error.message.substring(0, 100), 'error');
+                }
+                
+                document.getElementById('status').textContent = 'ERROR';
+                document.getElementById('status').style.color = '#ff4136';
+                
+                console.error('Full error:', error);
+            } finally {
+                document.getElementById('mintBtn').classList.remove('mining');
+                setTimeout(() => {
+                    loadData();
+                }, 2000);
+            }
+        }
+
+        // Auto-connect if wallet is already connected
+        window.addEventListener('load', () => {
+            if (window.ethereum && window.ethereum.selectedAddress) {
+                setTimeout(connectWallet, 500);
+            }
+        });
+
+        // Handle account/network changes
+        if (window.ethereum) {
+            window.ethereum.on('accountsChanged', (accounts) => {
+                if (accounts.length === 0) {
+                    log('🔌 Wallet disconnected', 'warning');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    log('🔄 Account changed, reloading...', 'info');
+                    setTimeout(() => location.reload(), 1000);
+                }
+            });
+
+            window.ethereum.on('chainChanged', () => {
+                log('🌐 Network changed, reloading...', 'info');
+                setTimeout(() => location.reload(), 1000);
+            });
+        }
+    </script>
+</body>
+</html>
